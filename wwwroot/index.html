@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SimpleInject</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- ===== TITLE BAR ===== -->
+    <div class="titlebar" id="titlebar">
+        <div class="titlebar-left">
+            <svg class="titlebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L12 14M12 14L8 10M12 14L16 10"/>
+                <path d="M5 17C5 17 5 21 12 21C19 21 19 17 19 17" stroke-linecap="round"/>
+            </svg>
+            <span class="titlebar-title">SimpleInject</span>
+            <span class="titlebar-version">v1.0</span>
+        </div>
+        <div class="titlebar-controls">
+            <button class="titlebar-btn minimize-btn" id="btn-minimize" title="Minimize">
+                <svg viewBox="0 0 12 12"><rect y="5" width="12" height="2" rx="1" fill="currentColor"/></svg>
+            </button>
+            <button class="titlebar-btn close-btn" id="btn-close" title="Close">
+                <svg viewBox="0 0 12 12">
+                    <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <div class="main-content">
+
+        <!-- Left Column -->
+        <div class="column column-left">
+            <!-- Process Selection Card -->
+            <div class="card card-process" style="--delay: 0.05s">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/>
+                            <path d="M8 21h8M12 17v4"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="card-title">Process</h2>
+                        <p class="card-subtitle">Select a target process</p>
+                    </div>
+                    <button class="refresh-btn" id="btn-refresh" title="Refresh process list">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 4v6h6M23 20v-6h-6"/>
+                            <path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="search-wrapper">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35"/>
+                    </svg>
+                    <input type="text" class="search-input" id="process-search" placeholder="Search processes..." autocomplete="off" spellcheck="false">
+                    <span class="process-count" id="process-count">0</span>
+                </div>
+
+                <div class="process-list-container">
+                    <div class="process-list" id="process-list">
+                        <div class="process-placeholder">
+                            <div class="spinner"></div>
+                            <span>Loading processes...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Selected process display -->
+                <div class="selected-process" id="selected-process" style="display:none;">
+                    <span class="selected-label">Selected:</span>
+                    <span class="selected-name" id="selected-name">—</span>
+                    <span class="selected-pid" id="selected-pid">—</span>
+                    <button class="clear-btn" id="btn-clear-process" title="Clear selection">✕</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="column column-right">
+            <!-- DLL Selection Card -->
+            <div class="card card-dll" style="--delay: 0.12s">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                            <polyline points="14,2 14,8 20,8"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="card-title">DLL File</h2>
+                        <p class="card-subtitle">Choose the library to inject</p>
+                    </div>
+                </div>
+
+                <div class="dll-path-wrapper">
+                    <div class="dll-path-display" id="dll-path-display">
+                        <span class="dll-path-text" id="dll-path-text">No file selected</span>
+                    </div>
+                    <button class="browse-btn" id="btn-browse">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                        </svg>
+                        Browse
+                    </button>
+                </div>
+
+                <div class="dll-info" id="dll-info" style="display:none;">
+                    <div class="dll-info-row">
+                        <span class="dll-info-label">File name</span>
+                        <span class="dll-info-value" id="dll-filename">—</span>
+                    </div>
+                    <div class="dll-info-row">
+                        <span class="dll-info-label">Full path</span>
+                        <span class="dll-info-value dll-info-path" id="dll-fullpath">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inject Card -->
+            <div class="card card-inject" style="--delay: 0.19s">
+                <div class="card-header">
+                    <div class="card-icon icon-inject">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="card-title">Inject</h2>
+                        <p class="card-subtitle">Execute DLL injection</p>
+                    </div>
+                </div>
+
+                <button class="inject-btn" id="btn-inject" disabled>
+                    <span class="inject-btn-text">INJECT</span>
+                    <span class="inject-btn-loader"></span>
+                    <div class="inject-btn-glow"></div>
+                </button>
+
+                <p class="inject-hint" id="inject-hint">Select a process and DLL to continue</p>
+            </div>
+
+            <!-- Status / Log Card -->
+            <div class="card card-log" style="--delay: 0.26s">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="card-title">Log</h2>
+                        <p class="card-subtitle">Injection results</p>
+                    </div>
+                    <button class="refresh-btn" id="btn-clear-log" title="Clear log">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3,6 5,6 21,6"/>
+                            <path d="M19 6l-2 14H7L5 6M10 11v6M14 11v6M5 6l1-3h12l1 3"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="log-container" id="log-container">
+                    <div class="log-empty">No logs yet</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notification -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

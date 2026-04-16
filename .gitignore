@@ -1,0 +1,10 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.pdb
+*.lock.json
+wwwroot/node_modules/
+MakeIcon.cs
+MakeIcon.exe
