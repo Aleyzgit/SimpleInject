@@ -389,19 +389,23 @@
     }
 
     function checkForGameProcess() {
-        const status = $('#target-status');
-        if (!status) return;
+        const select = $('#target-select');
+        if (!select) return;
 
         // Check if any game processes are running
         const gameProcesses = processes.filter(p =>
             p.Name.toLowerCase().includes('roblox') ||
-            p.Name.toLowerCase().includes('robloxplayer')
+            p.Name.toLowerCase().includes('robloxplayer') ||
+            p.Name.toLowerCase().includes('eurotrucks2') ||
+            p.Name.toLowerCase().includes('hl2')
         );
 
         if (gameProcesses.length > 0) {
-            status.innerHTML = `<div class="status-dot online"></div><span>Detected: ${gameProcesses[0].Name} (PID: ${gameProcesses[0].Id})</span>`;
+            select.innerHTML = gameProcesses.map(p => 
+                `<option value="${p.Id}">${escapeHtml(p.Name)} (PID: ${p.Id})</option>`
+            ).join('');
         } else {
-            status.innerHTML = `<div class="status-dot offline"></div><span>No game instance detected</span>`;
+            select.innerHTML = `<option value="">No game instance detected</option>`;
         }
     }
 

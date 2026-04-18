@@ -183,15 +183,14 @@
                         <div class="card-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
                         </div>
-                        <div><h2 class="card-title">Target</h2><p class="card-subtitle">Auto-detects running game instances</p></div>
+                        <div><h2 class="card-title">Target</h2><p class="card-subtitle">Manual Game Selection</p></div>
                         <button class="refresh-btn" id="btn-refresh-scripts" title="Refresh">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
                         </button>
                     </div>
-                    <div class="target-status" id="target-status">
-                        <div class="status-dot offline"></div>
-                        <span>No game instance detected</span>
-                    </div>
+                    <select id="target-select" class="target-select">
+                        <option value="">No game instance detected</option>
+                    </select>
                 </div>
                 <div class="card" style="--delay: 0.15s">
                     <div class="card-header">

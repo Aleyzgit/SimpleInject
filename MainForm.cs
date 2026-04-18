@@ -137,14 +137,28 @@ public class MainForm : Form
 
                 case "executeScript":
                     var script = root.GetProperty("script").GetString();
-                    // Script execution is a placeholder - would need a proper scripting engine
-                    var scriptResult = JsonSerializer.Serialize(new
+                    _ = Task.Run(async () =>
                     {
-                        type = "scriptResult",
-                        success = true,
-                        message = $"Script received ({script?.Split('\n').Length ?? 0} lines). Execution engine not yet connected."
+                        try
+                        {
+                            using var pipeClient = new System.IO.Pipes.NamedPipeClientStream(".", "SimpleInjectPipe", System.IO.Pipes.PipeDirection.Out);
+                            await pipeClient.ConnectAsync(1500); // 1.5 second timeout
+                            using var writer = new System.IO.StreamWriter(pipeClient);
+                            await writer.WriteAsync(script);
+                            var sResult = JsonSerializer.Serialize(new { type = "scriptResult", success = true, message = $"Script sent successfully ({script?.Split('\n').Length ?? 0} lines)." });
+                            BeginInvoke(() => _webView.CoreWebView2.PostWebMessageAsJson(sResult));
+                        }
+                        catch (TimeoutException)
+                        {
+                            var eResult = JsonSerializer.Serialize(new { type = "scriptResult", success = false, message = "Failed to connect to execution engine... Did you actually inject your executor DLL first?" });
+                            BeginInvoke(() => _webView.CoreWebView2.PostWebMessageAsJson(eResult));
+                        }
+                        catch (Exception ex)
+                        {
+                            var eResult = JsonSerializer.Serialize(new { type = "scriptResult", success = false, message = $"Execution Error: {ex.Message}" });
+                            BeginInvoke(() => _webView.CoreWebView2.PostWebMessageAsJson(eResult));
+                        }
                     });
-                    BeginInvoke(() => _webView.CoreWebView2.PostWebMessageAsJson(scriptResult));
                     break;
             }
         }
