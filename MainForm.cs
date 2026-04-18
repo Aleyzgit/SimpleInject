@@ -12,16 +12,26 @@ public class MainForm : Form
     [DllImport("dwmapi.dll")]
     static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
 
+    // For window dragging
+    [DllImport("user32.dll")]
+    static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
+    [DllImport("user32.dll")]
+    static extern bool ReleaseCapture();
+
+    const int WM_NCLBUTTONDOWN = 0xA1;
+    const int HT_CAPTION = 0x2;
+
     public MainForm()
     {
         Text = "SimpleInject";
-        Size = new Size(900, 620);
-        MinimumSize = new Size(750, 500);
+        Size = new Size(920, 640);
+        MinimumSize = new Size(760, 500);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.None;
         BackColor = Color.FromArgb(13, 13, 17);
+        DoubleBuffered = true;
 
-        // Try load icon
+        // Load icon
         try { Icon = new Icon("app.ico"); } catch { }
 
         InitializeWebView();
@@ -30,7 +40,7 @@ public class MainForm : Form
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        // Enable rounded corners on Windows 11
+        // Rounded corners (Windows 11)
         int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
         int DWMWCP_ROUND = 2;
         DwmSetWindowAttribute(Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref DWMWCP_ROUND, sizeof(int));
@@ -45,52 +55,39 @@ public class MainForm : Form
         };
         Controls.Add(_webView);
 
+        // Use a cached environment for faster startup
         var env = await CoreWebView2Environment.CreateAsync(
-            userDataFolder: Path.Combine(Path.GetTempPath(), "SimpleInject_WebView2"));
+            null, 
+            Path.Combine(Path.GetTempPath(), "SimpleInject_WebView2"),
+            new CoreWebView2EnvironmentOptions("--disable-features=msWebOOProcess")
+        );
+
         await _webView.EnsureCoreWebView2Async(env);
 
-        // Map the wwwroot folder to a virtual host
-        string wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
-        _webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-            "simpleinject.local", wwwroot, CoreWebView2HostResourceAccessKind.Allow);
-
-        // Disable context menu and dev tools in release
+        // Disable dev tools in production, allow in debug
+        #if !DEBUG
+        _webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+        #endif
+        _webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
         _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
-        _webView.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = false;
-        _webView.CoreWebView2.Settings.IsZoomControlEnabled = false;
 
-        // Handle messages from JS
         _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
 
-        // Navigate to the UI
-        _webView.CoreWebView2.Navigate("https://simpleinject.local/index.html");
+        string htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot", "index.html");
+        _webView.CoreWebView2.Navigate(new Uri(htmlPath).AbsoluteUri);
     }
 
-    private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    private async void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
         try
         {
-            string json = e.WebMessageAsJson;
+            var json = e.WebMessageAsJson;
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            string action = root.GetProperty("action").GetString() ?? "";
+            var type = root.GetProperty("type").GetString();
 
-            switch (action)
+            switch (type)
             {
-                case "getProcesses":
-                    HandleGetProcesses();
-                    break;
-
-                case "browseDll":
-                    HandleBrowseDll();
-                    break;
-
-                case "inject":
-                    int pid = root.GetProperty("pid").GetInt32();
-                    string dllPath = root.GetProperty("dllPath").GetString() ?? "";
-                    HandleInject(pid, dllPath);
-                    break;
-
                 case "minimize":
                     BeginInvoke(() => WindowState = FormWindowState.Minimized);
                     break;
@@ -99,84 +96,82 @@ public class MainForm : Form
                     BeginInvoke(() => Close());
                     break;
 
-                case "dragStart":
+                case "dragWindow":
                     BeginInvoke(() =>
                     {
                         ReleaseCapture();
                         SendMessage(Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
                     });
                     break;
+
+                case "getProcesses":
+                    var procs = await Injector.GetProcessListAsync();
+                    var procsJson = JsonSerializer.Serialize(new { type = "processes", data = procs });
+                    BeginInvoke(() => _webView.CoreWebView2.PostWebMessageAsJson(procsJson));
+                    break;
+
+                case "browseDll":
+                    BeginInvoke(() =>
+                    {
+                        using var ofd = new OpenFileDialog
+                        {
+                            Filter = "DLL Files|*.dll|All Files|*.*",
+                            Title = "Select DLL to Inject"
+                        };
+                        if (ofd.ShowDialog() == DialogResult.OK)
+                        {
+                            var result = JsonSerializer.Serialize(new { type = "dllSelected", path = ofd.FileName });
+                            _webView.CoreWebView2.PostWebMessageAsJson(result);
+                        }
+                    });
+                    break;
+
+                case "inject":
+                    var processId = root.GetProperty("processId").GetInt32();
+                    var dllPath = root.GetProperty("dllPath").GetString()!;
+
+                    var (success, message) = await Task.Run(() => Injector.Inject(processId, dllPath));
+                    var injectResult = JsonSerializer.Serialize(new { type = "injectResult", success, message });
+                    BeginInvoke(() => _webView.CoreWebView2.PostWebMessageAsJson(injectResult));
+                    break;
+
+                case "executeScript":
+                    var script = root.GetProperty("script").GetString();
+                    // Script execution is a placeholder - would need a proper scripting engine
+                    var scriptResult = JsonSerializer.Serialize(new
+                    {
+                        type = "scriptResult",
+                        success = true,
+                        message = $"Script received ({script?.Split('\n').Length ?? 0} lines). Execution engine not yet connected."
+                    });
+                    BeginInvoke(() => _webView.CoreWebView2.PostWebMessageAsJson(scriptResult));
+                    break;
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"WebMessage error: {ex.Message} | Raw: {e.WebMessageAsJson}");
-            SendToJs("error", new { message = ex.Message });
+            System.Diagnostics.Debug.WriteLine($"Message handling error: {ex.Message}");
+            try
+            {
+                var errorMsg = JsonSerializer.Serialize(new { type = "error", message = ex.Message });
+                BeginInvoke(() => _webView.CoreWebView2.PostWebMessageAsJson(errorMsg));
+            }
+            catch { }
         }
     }
 
-    private void HandleGetProcesses()
-    {
-        var processes = Injector.GetProcessList();
-        SendToJs("processList", new { processes });
-    }
-
-    private void HandleBrowseDll()
-    {
-        BeginInvoke(() =>
-        {
-            using var ofd = new OpenFileDialog
-            {
-                Title = "Select DLL to inject",
-                Filter = "DLL Files (*.dll)|*.dll|All Files (*.*)|*.*",
-                CheckFileExists = true
-            };
-
-            if (ofd.ShowDialog(this) == DialogResult.OK)
-            {
-                SendToJs("dllSelected", new { path = ofd.FileName });
-            }
-        });
-    }
-
-    private void HandleInject(int pid, string dllPath)
-    {
-        var (success, message) = Injector.Inject(pid, dllPath);
-        SendToJs("injectResult", new { success, message });
-    }
-
-    private void SendToJs(string action, object data)
-    {
-        var payload = JsonSerializer.Serialize(new { action, data });
-        BeginInvoke(() =>
-        {
-            _webView.CoreWebView2?.PostWebMessageAsJson(payload);
-        });
-    }
-
-    // --- Native methods for borderless window dragging ---
-    const int WM_NCLBUTTONDOWN = 0xA1;
-    const int HT_CAPTION = 0x2;
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
-
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    static extern bool ReleaseCapture();
-
-    // Allow resizing via hit-test on edges
+    // Edge resize support
     protected override void WndProc(ref Message m)
     {
         const int WM_NCHITTEST = 0x84;
-        const int HTLEFT = 10, HTRIGHT = 11, HTTOP = 12, HTTOPLEFT = 13, HTTOPRIGHT = 14;
-        const int HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
-        const int GRIP = 8;
+        const int HTLEFT = 10, HTRIGHT = 11, HTTOP = 12, HTTOPLEFT = 13;
+        const int HTTOPRIGHT = 14, HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
+        const int GRIP = 6;
 
         if (m.Msg == WM_NCHITTEST)
         {
             base.WndProc(ref m);
             var pos = PointToClient(new Point(m.LParam.ToInt32() & 0xFFFF, m.LParam.ToInt32() >> 16));
-
             if (pos.Y <= GRIP)
             {
                 if (pos.X <= GRIP) m.Result = (IntPtr)HTTOPLEFT;
@@ -191,10 +186,8 @@ public class MainForm : Form
             }
             else if (pos.X <= GRIP) m.Result = (IntPtr)HTLEFT;
             else if (pos.X >= ClientSize.Width - GRIP) m.Result = (IntPtr)HTRIGHT;
-
             return;
         }
-
         base.WndProc(ref m);
     }
 }

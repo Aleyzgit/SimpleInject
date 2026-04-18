@@ -1,368 +1,581 @@
 // ============================================================
-//  SimpleInject — UI Logic
+//  SimpleInject v2.0 — App Logic
 // ============================================================
-
 (() => {
     'use strict';
 
-    // --- State ---
+    // ── State ──────────────────────────────────────────────
     let processes = [];
     let selectedProcess = null;
-    let dllPath = '';
-    let isInjecting = false;
+    let selectedDll = null;
+    let favorites = JSON.parse(localStorage.getItem('si_favorites') || '[]');
+    let recentDlls = JSON.parse(localStorage.getItem('si_recentDlls') || '[]');
+    let settings = {
+        theme: localStorage.getItem('si_theme') || 'theme-amber',
+        autoRefresh: localStorage.getItem('si_autoRefresh') !== 'false',
+        showTitles: localStorage.getItem('si_showTitles') !== 'false',
+        rememberDll: localStorage.getItem('si_rememberDll') !== 'false',
+    };
 
-    // --- DOM refs ---
+    // ── Script library ─────────────────────────────────────
+    const scriptLibrary = [
+        { name: 'Hello World', tag: 'basic', code: 'print("Hello from SimpleInject!")' },
+        { name: 'Print All Players', tag: 'players', code: 'for _, player in pairs(game.Players:GetPlayers()) do\n    print(player.Name)\nend' },
+        { name: 'Workspace Info', tag: 'debug', code: 'for _, obj in pairs(workspace:GetChildren()) do\n    print(obj.ClassName .. ": " .. obj.Name)\nend' },
+        { name: 'Server Time', tag: 'util', code: 'print("Server time: " .. tostring(workspace.DistributedGameTime))' },
+        { name: 'Camera Info', tag: 'debug', code: 'local cam = workspace.CurrentCamera\nprint("FOV: " .. cam.FieldOfView)\nprint("Type: " .. tostring(cam.CameraType))' },
+    ];
+
+    // ── DOM Elements ───────────────────────────────────────
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => document.querySelectorAll(sel);
 
-    const btnMinimize    = $('#btn-minimize');
-    const btnClose       = $('#btn-close');
-    const titlebar       = $('#titlebar');
+    // ── Initialization ─────────────────────────────────────
+    function init() {
+        applyTheme(settings.theme);
+        applySettings();
+        setupTabs();
+        setupTitlebar();
+        setupProcessList();
+        setupDllSelection();
+        setupInject();
+        setupSettings();
+        setupScriptEditor();
+        setupScriptLibrary();
+        setupKeyboardShortcuts();
+        renderRecentDlls();
 
-    const processSearch  = $('#process-search');
-    const processList    = $('#process-list');
-    const processCount   = $('#process-count');
-    const btnRefresh     = $('#btn-refresh');
-    const selectedBar    = $('#selected-process');
-    const selectedName   = $('#selected-name');
-    const selectedPid    = $('#selected-pid');
-    const btnClearProc   = $('#btn-clear-process');
+        // Restore last DLL
+        if (settings.rememberDll) {
+            const lastDll = localStorage.getItem('si_lastDll');
+            if (lastDll) setDll(lastDll);
+        }
 
-    const btnBrowse      = $('#btn-browse');
-    const dllPathDisplay = $('#dll-path-display');
-    const dllPathText    = $('#dll-path-text');
-    const dllInfo        = $('#dll-info');
-    const dllFilename    = $('#dll-filename');
-    const dllFullpath    = $('#dll-fullpath');
-
-    const btnInject      = $('#btn-inject');
-    const injectHint     = $('#inject-hint');
-
-    const logContainer   = $('#log-container');
-    const btnClearLog    = $('#btn-clear-log');
-    const toastContainer = $('#toast-container');
-
-    // ============================================================
-    //  WebView2 Communication
-    // ============================================================
-
-    function sendMessage(action, data = {}) {
-        window.chrome.webview.postMessage({ action, ...data });
-    }
-
-    // Listen for messages from C#
-    window.chrome.webview.addEventListener('message', (event) => {
-        const msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        handleBackendMessage(msg);
-    });
-
-    function handleBackendMessage(msg) {
-        switch (msg.action) {
-            case 'processList':
-                onProcessListReceived(msg.data.processes);
-                break;
-            case 'dllSelected':
-                onDllSelected(msg.data.path);
-                break;
-            case 'injectResult':
-                onInjectResult(msg.data.success, msg.data.message);
-                break;
-            case 'error':
-                showToast(msg.data.message, 'error');
-                addLog(msg.data.message, 'error');
-                break;
+        // Load processes
+        if (settings.autoRefresh) {
+            requestProcesses();
         }
     }
 
-    // ============================================================
-    //  Title Bar
-    // ============================================================
+    // ── Theme System ───────────────────────────────────────
+    function applyTheme(theme) {
+        document.documentElement.className = theme;
+        settings.theme = theme;
+        localStorage.setItem('si_theme', theme);
 
-    btnMinimize.addEventListener('click', () => sendMessage('minimize'));
-    btnClose.addEventListener('click', () => sendMessage('close'));
+        // Update active swatch
+        $$('.theme-swatch').forEach(s => {
+            s.classList.toggle('active', s.dataset.theme === theme);
+        });
+    }
 
-    // Drag — forward mousedown on titlebar to C#
-    titlebar.addEventListener('mousedown', (e) => {
-        // Only drag on the titlebar itself, not on buttons
-        if (e.target.closest('.titlebar-btn')) return;
-        sendMessage('dragStart');
-    });
+    // ── Settings ───────────────────────────────────────────
+    function applySettings() {
+        const autoRefresh = $('#setting-autorefresh');
+        const showTitles = $('#setting-showtitles');
+        const rememberDll = $('#setting-rememberdll');
+        if (autoRefresh) autoRefresh.checked = settings.autoRefresh;
+        if (showTitles) showTitles.checked = settings.showTitles;
+        if (rememberDll) rememberDll.checked = settings.rememberDll;
+    }
 
-    // ============================================================
-    //  Process List
-    // ============================================================
+    function saveSetting(key, value) {
+        settings[key] = value;
+        localStorage.setItem('si_' + key, value.toString());
+    }
+
+    function setupSettings() {
+        const overlay = $('#settings-overlay');
+        const btnOpen = $('#btn-settings');
+        const btnClose = $('#btn-close-settings');
+
+        btnOpen?.addEventListener('click', () => overlay.classList.add('open'));
+        btnClose?.addEventListener('click', () => overlay.classList.remove('open'));
+        overlay?.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.classList.remove('open');
+        });
+
+        // Theme swatches
+        $$('.theme-swatch').forEach(swatch => {
+            swatch.addEventListener('click', () => applyTheme(swatch.dataset.theme));
+        });
+
+        // Toggles
+        $('#setting-autorefresh')?.addEventListener('change', (e) => saveSetting('autoRefresh', e.target.checked));
+        $('#setting-showtitles')?.addEventListener('change', (e) => {
+            saveSetting('showTitles', e.target.checked);
+            renderProcessList();
+        });
+        $('#setting-rememberdll')?.addEventListener('change', (e) => saveSetting('rememberDll', e.target.checked));
+    }
+
+    // ── Tabs ───────────────────────────────────────────────
+    function setupTabs() {
+        $$('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                $$('.tab').forEach(t => t.classList.remove('active'));
+                $$('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                const content = $(`#content-${tab.dataset.tab}`);
+                if (content) content.classList.add('active');
+            });
+        });
+    }
+
+    // ── Titlebar ───────────────────────────────────────────
+    function setupTitlebar() {
+        $('#btn-minimize')?.addEventListener('click', () => sendMessage({ type: 'minimize' }));
+        $('#btn-close')?.addEventListener('click', () => sendMessage({ type: 'close' }));
+
+        $('#titlebar')?.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.titlebar-controls')) return;
+            sendMessage({ type: 'dragWindow' });
+        });
+    }
+
+    // ── Process List ───────────────────────────────────────
+    function setupProcessList() {
+        $('#btn-refresh')?.addEventListener('click', () => {
+            const btn = $('#btn-refresh');
+            btn.classList.add('spinning');
+            setTimeout(() => btn.classList.remove('spinning'), 600);
+            requestProcesses();
+        });
+
+        $('#process-search')?.addEventListener('input', renderProcessList);
+
+        $('#btn-clear-process')?.addEventListener('click', () => {
+            selectedProcess = null;
+            $('#selected-process').style.display = 'none';
+            renderProcessList();
+            updateInjectButton();
+        });
+
+        $('#btn-fav-process')?.addEventListener('click', () => {
+            if (!selectedProcess) return;
+            const name = selectedProcess.Name;
+            if (favorites.includes(name)) {
+                favorites = favorites.filter(f => f !== name);
+            } else {
+                favorites.push(name);
+            }
+            localStorage.setItem('si_favorites', JSON.stringify(favorites));
+            renderProcessList();
+        });
+
+        // Delegate clicks on process items
+        $('#process-list')?.addEventListener('click', (e) => {
+            const item = e.target.closest('.process-item');
+            if (!item) return;
+            const pid = parseInt(item.dataset.pid);
+            const proc = processes.find(p => p.Id === pid);
+            if (proc) {
+                selectedProcess = proc;
+                $('#selected-process').style.display = 'flex';
+                $('#selected-name').textContent = proc.Name;
+                $('#selected-pid').textContent = `PID: ${proc.Id}`;
+                renderProcessList();
+                updateInjectButton();
+            }
+        });
+    }
 
     function requestProcesses() {
-        btnRefresh.classList.add('spinning');
-        sendMessage('getProcesses');
+        sendMessage({ type: 'getProcesses' });
     }
 
-    function onProcessListReceived(list) {
-        btnRefresh.classList.remove('spinning');
-        processes = list || [];
-        renderProcessList();
-    }
+    function renderProcessList() {
+        const container = $('#process-list');
+        const searchEl = $('#process-search');
+        const countEl = $('#process-count');
+        if (!container) return;
 
-    function renderProcessList(filter = '') {
-        const term = filter.toLowerCase().trim();
-        const filtered = term
-            ? processes.filter(p =>
-                p.Name.toLowerCase().includes(term) ||
-                p.Id.toString().includes(term) ||
-                (p.WindowTitle && p.WindowTitle.toLowerCase().includes(term))
-              )
-            : processes;
+        const search = (searchEl?.value || '').toLowerCase();
+        let filtered = processes.filter(p =>
+            p.Name.toLowerCase().includes(search) ||
+            (p.WindowTitle && p.WindowTitle.toLowerCase().includes(search)) ||
+            p.Id.toString().includes(search)
+        );
 
-        processCount.textContent = filtered.length;
+        // Sort: favorites first, then alphabetical
+        filtered.sort((a, b) => {
+            const aFav = favorites.includes(a.Name) ? 0 : 1;
+            const bFav = favorites.includes(b.Name) ? 0 : 1;
+            if (aFav !== bFav) return aFav - bFav;
+            return a.Name.localeCompare(b.Name, undefined, { sensitivity: 'base' });
+        });
+
+        if (countEl) countEl.textContent = filtered.length;
 
         if (filtered.length === 0) {
-            processList.innerHTML = `
-                <div class="process-placeholder">
-                    <span>${processes.length === 0 ? 'No processes loaded' : 'No matching processes'}</span>
-                </div>`;
+            container.innerHTML = `<div class="process-placeholder">${processes.length === 0 ? '<div class="spinner"></div><span>Loading...</span>' : '<span>No matching processes</span>'}</div>`;
             return;
         }
 
-        // Virtual-ish rendering: only render visible + buffer
         const html = filtered.map(p => {
             const isSelected = selectedProcess && selectedProcess.Id === p.Id;
-            const windowTitle = p.WindowTitle ? `<span class="process-window" title="${escapeHtml(p.WindowTitle)}">${escapeHtml(p.WindowTitle)}</span>` : '';
+            const isFav = favorites.includes(p.Name);
+            const showTitle = settings.showTitles && p.WindowTitle;
+            const windowTitle = showTitle ? `<span class="process-window" title="${escapeHtml(p.WindowTitle)}">${escapeHtml(p.WindowTitle)}</span>` : '';
             const icon = p.IconBase64
                 ? `<img class="process-icon" src="${p.IconBase64}" alt="" draggable="false">`
-                : `<div class="process-icon process-icon-fallback"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="3"/></svg></div>`;
-            return `
-                <div class="process-item${isSelected ? ' selected' : ''}" data-pid="${p.Id}" data-name="${escapeHtml(p.Name)}">
-                    ${icon}
-                    <span class="process-name">${escapeHtml(p.Name)}</span>
-                    ${windowTitle}
-                    <span class="process-pid">${p.Id}</span>
-                </div>`;
+                : `<div class="process-icon-fallback"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="3"/></svg></div>`;
+            return `<div class="process-item${isSelected ? ' selected' : ''}${isFav ? ' favorite' : ''}" data-pid="${p.Id}">
+                ${icon}
+                <span class="process-name">${escapeHtml(p.Name)}</span>
+                ${windowTitle}
+                <span class="process-pid">${p.Id}</span>
+            </div>`;
         }).join('');
 
-        processList.innerHTML = html;
+        container.innerHTML = html;
     }
 
-    // Search
-    processSearch.addEventListener('input', (e) => {
-        renderProcessList(e.target.value);
-    });
-
-    // Select process
-    processList.addEventListener('click', (e) => {
-        const item = e.target.closest('.process-item');
-        if (!item) return;
-
-        const pid = parseInt(item.dataset.pid);
-        const name = item.dataset.name;
-
-        selectedProcess = { Id: pid, Name: name };
-
-        // Update UI
-        selectedBar.style.display = 'flex';
-        selectedName.textContent = name;
-        selectedPid.textContent = `PID: ${pid}`;
-
-        // Highlight in list
-        processList.querySelectorAll('.process-item').forEach(el => el.classList.remove('selected'));
-        item.classList.add('selected');
-
-        updateInjectButton();
-        addLog(`Selected process: ${name} (PID: ${pid})`, 'info');
-    });
-
-    // Clear selection
-    btnClearProc.addEventListener('click', () => {
-        selectedProcess = null;
-        selectedBar.style.display = 'none';
-        processList.querySelectorAll('.process-item').forEach(el => el.classList.remove('selected'));
-        updateInjectButton();
-    });
-
-    // Refresh
-    btnRefresh.addEventListener('click', requestProcesses);
-
-    // ============================================================
-    //  DLL Selection
-    // ============================================================
-
-    btnBrowse.addEventListener('click', () => {
-        sendMessage('browseDll');
-    });
-
-    function onDllSelected(path) {
-        dllPath = path;
-        const filename = path.split('\\').pop().split('/').pop();
-
-        dllPathText.textContent = filename;
-        dllPathDisplay.classList.add('has-file');
-
-        dllInfo.style.display = 'block';
-        dllFilename.textContent = filename;
-        dllFullpath.textContent = path;
-        dllFullpath.title = path;
-
-        updateInjectButton();
-        addLog(`DLL selected: ${filename}`, 'info');
-    }
-
-    // ============================================================
-    //  Injection
-    // ============================================================
-
-    btnInject.addEventListener('click', () => {
-        if (!selectedProcess || !dllPath || isInjecting) return;
-
-        isInjecting = true;
-        btnInject.classList.add('loading');
-        btnInject.disabled = true;
-        injectHint.textContent = 'Injecting...';
-
-        addLog(`Injecting into ${selectedProcess.Name} (PID: ${selectedProcess.Id})...`, 'info');
-
-        sendMessage('inject', {
-            pid: selectedProcess.Id,
-            dllPath: dllPath
+    // ── DLL Selection ──────────────────────────────────────
+    function setupDllSelection() {
+        $('#btn-browse')?.addEventListener('click', () => {
+            sendMessage({ type: 'browseDll' });
         });
-    });
+    }
 
-    function onInjectResult(success, message) {
-        isInjecting = false;
-        btnInject.classList.remove('loading');
-        updateInjectButton();
+    function setDll(path) {
+        selectedDll = path;
+        const display = $('#dll-path-display');
+        const text = $('#dll-path-text');
+        const info = $('#dll-info');
 
-        if (success) {
-            addLog(message, 'success');
-            showToast(message, 'success');
-            injectHint.textContent = 'Injection successful!';
-            injectHint.style.color = 'var(--success)';
+        if (display) display.classList.add('has-file');
+        if (text) text.textContent = path.split('\\').pop();
 
-            // Pulse the inject button green briefly
-            btnInject.style.background = 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)';
-            btnInject.style.boxShadow = '0 4px 16px rgba(34, 197, 94, 0.3)';
-            setTimeout(() => {
-                btnInject.style.background = '';
-                btnInject.style.boxShadow = '';
-                injectHint.style.color = '';
-                injectHint.textContent = 'Ready to inject';
-            }, 2000);
-        } else {
-            addLog(message, 'error');
-            showToast(message, 'error');
-            injectHint.textContent = 'Injection failed';
-            injectHint.style.color = 'var(--error)';
-            setTimeout(() => {
-                injectHint.style.color = '';
-                updateInjectButton();
-            }, 3000);
+        if (info) {
+            info.style.display = 'block';
+            const filename = $('#dll-filename');
+            const fullpath = $('#dll-fullpath');
+            if (filename) filename.textContent = path.split('\\').pop();
+            if (fullpath) fullpath.textContent = path;
         }
+
+        // Save to recent
+        addRecentDll(path);
+        if (settings.rememberDll) {
+            localStorage.setItem('si_lastDll', path);
+        }
+
+        updateInjectButton();
+    }
+
+    function addRecentDll(path) {
+        recentDlls = recentDlls.filter(d => d !== path);
+        recentDlls.unshift(path);
+        if (recentDlls.length > 5) recentDlls = recentDlls.slice(0, 5);
+        localStorage.setItem('si_recentDlls', JSON.stringify(recentDlls));
+        renderRecentDlls();
+    }
+
+    function renderRecentDlls() {
+        const container = $('#recent-dlls');
+        const list = $('#recent-list');
+        if (!container || !list) return;
+
+        if (recentDlls.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'flex';
+        list.innerHTML = recentDlls.map(dll => {
+            const name = dll.split('\\').pop();
+            return `<div class="recent-item" data-path="${escapeHtml(dll)}" title="${escapeHtml(dll)}">${escapeHtml(name)}</div>`;
+        }).join('');
+
+        list.querySelectorAll('.recent-item').forEach(item => {
+            item.addEventListener('click', () => setDll(item.dataset.path));
+        });
+    }
+
+    // ── Inject ─────────────────────────────────────────────
+    function setupInject() {
+        $('#btn-inject')?.addEventListener('click', () => {
+            if (!selectedProcess || !selectedDll) return;
+            const btn = $('#btn-inject');
+            btn.classList.add('loading');
+            btn.disabled = true;
+
+            sendMessage({
+                type: 'inject',
+                processId: selectedProcess.Id,
+                dllPath: selectedDll
+            });
+        });
     }
 
     function updateInjectButton() {
-        const ready = selectedProcess && dllPath && !isInjecting;
-        btnInject.disabled = !ready;
+        const btn = $('#btn-inject');
+        const hint = $('#inject-hint');
+        if (!btn) return;
 
-        if (ready) {
-            injectHint.textContent = `Ready — ${selectedProcess.Name} ← ${dllPath.split('\\').pop()}`;
-        } else if (!selectedProcess && !dllPath) {
-            injectHint.textContent = 'Select a process and DLL to continue';
-        } else if (!selectedProcess) {
-            injectHint.textContent = 'Select a target process';
-        } else if (!dllPath) {
-            injectHint.textContent = 'Choose a DLL file to inject';
+        const ready = selectedProcess && selectedDll;
+        btn.disabled = !ready;
+        btn.classList.remove('loading');
+
+        if (hint) {
+            if (ready) {
+                hint.textContent = `Ready to inject into ${selectedProcess.Name}`;
+                hint.style.color = 'var(--accent)';
+            } else if (!selectedProcess && !selectedDll) {
+                hint.textContent = 'Select a process and DLL to continue';
+                hint.style.color = '';
+            } else if (!selectedProcess) {
+                hint.textContent = 'Select a target process';
+                hint.style.color = '';
+            } else {
+                hint.textContent = 'Choose a DLL file';
+                hint.style.color = '';
+            }
         }
     }
 
-    // ============================================================
-    //  Log
-    // ============================================================
+    // ── Script Editor ──────────────────────────────────────
+    function setupScriptEditor() {
+        const editor = $('#script-editor');
+        const lineNums = $('#line-numbers');
 
-    function addLog(message, type = 'info') {
-        // Remove "empty" placeholder
-        const empty = logContainer.querySelector('.log-empty');
+        if (editor && lineNums) {
+            const updateLines = () => {
+                const lines = editor.value.split('\n').length;
+                lineNums.textContent = Array.from({ length: lines }, (_, i) => i + 1).join('\n');
+                // Enable execute button if there's content
+                const execBtn = $('#btn-execute');
+                if (execBtn) execBtn.disabled = !editor.value.trim();
+            };
+
+            editor.addEventListener('input', updateLines);
+            editor.addEventListener('scroll', () => { lineNums.scrollTop = editor.scrollTop; });
+
+            // Tab key support
+            editor.addEventListener('keydown', (e) => {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const start = editor.selectionStart;
+                    const end = editor.selectionEnd;
+                    editor.value = editor.value.substring(0, start) + '    ' + editor.value.substring(end);
+                    editor.selectionStart = editor.selectionEnd = start + 4;
+                    updateLines();
+                }
+            });
+        }
+
+        $('#btn-clear-script')?.addEventListener('click', () => {
+            if (editor) {
+                editor.value = '';
+                if (lineNums) lineNums.textContent = '1';
+                const execBtn = $('#btn-execute');
+                if (execBtn) execBtn.disabled = true;
+            }
+        });
+
+        $('#btn-execute')?.addEventListener('click', () => {
+            if (!editor?.value.trim()) return;
+            addScriptOutput('info', `Executing script (${editor.value.split('\n').length} lines)...`);
+            sendMessage({ type: 'executeScript', script: editor.value });
+        });
+
+        // Refresh for script tab
+        $('#btn-refresh-scripts')?.addEventListener('click', () => {
+            checkForGameProcess();
+        });
+
+        checkForGameProcess();
+    }
+
+    function checkForGameProcess() {
+        const status = $('#target-status');
+        if (!status) return;
+
+        // Check if any game processes are running
+        const gameProcesses = processes.filter(p =>
+            p.Name.toLowerCase().includes('roblox') ||
+            p.Name.toLowerCase().includes('robloxplayer')
+        );
+
+        if (gameProcesses.length > 0) {
+            status.innerHTML = `<div class="status-dot online"></div><span>Detected: ${gameProcesses[0].Name} (PID: ${gameProcesses[0].Id})</span>`;
+        } else {
+            status.innerHTML = `<div class="status-dot offline"></div><span>No game instance detected</span>`;
+        }
+    }
+
+    function addScriptOutput(type, message) {
+        const container = $('#script-output');
+        if (!container) return;
+
+        const empty = container.querySelector('.log-empty');
         if (empty) empty.remove();
 
-        const now = new Date();
-        const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-
+        const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
         const entry = document.createElement('div');
         entry.className = `log-entry ${type}`;
-        entry.innerHTML = `
-            <div class="log-dot"></div>
-            <span class="log-time">${time}</span>
-            <span class="log-message">${escapeHtml(message)}</span>
-        `;
-
-        logContainer.appendChild(entry);
-        logContainer.scrollTop = logContainer.scrollHeight;
+        entry.innerHTML = `<div class="log-dot"></div><span class="log-time">${time}</span><span class="log-message">${escapeHtml(message)}</span>`;
+        container.appendChild(entry);
+        container.scrollTop = container.scrollHeight;
     }
 
-    btnClearLog.addEventListener('click', () => {
-        logContainer.innerHTML = '<div class="log-empty">No logs yet</div>';
-    });
+    function setupScriptLibrary() {
+        const container = $('#script-library');
+        if (!container) return;
 
-    // ============================================================
-    //  Toast
-    // ============================================================
+        container.innerHTML = scriptLibrary.map((script, i) => `
+            <div class="script-item" data-index="${i}">
+                <span class="script-item-name">${script.name}</span>
+                <span class="script-item-tag">${script.tag}</span>
+            </div>
+        `).join('');
 
+        container.querySelectorAll('.script-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const idx = parseInt(item.dataset.index);
+                const script = scriptLibrary[idx];
+                const editor = $('#script-editor');
+                if (editor && script) {
+                    editor.value = script.code;
+                    const lineNums = $('#line-numbers');
+                    if (lineNums) {
+                        const lines = editor.value.split('\n').length;
+                        lineNums.textContent = Array.from({ length: lines }, (_, i) => i + 1).join('\n');
+                    }
+                    const execBtn = $('#btn-execute');
+                    if (execBtn) execBtn.disabled = false;
+
+                    // Switch to script tab if not already there
+                    const scriptTab = $('#tab-scripts');
+                    if (scriptTab && !scriptTab.classList.contains('active')) {
+                        scriptTab.click();
+                    }
+                }
+            });
+        });
+    }
+
+    // ── Keyboard Shortcuts ─────────────────────────────────
+    function setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+R — Refresh
+            if (e.ctrlKey && e.key === 'r') {
+                e.preventDefault();
+                requestProcesses();
+            }
+            // Escape — Close settings
+            if (e.key === 'Escape') {
+                $('#settings-overlay')?.classList.remove('open');
+            }
+            // Ctrl+, — Open settings
+            if (e.ctrlKey && e.key === ',') {
+                e.preventDefault();
+                $('#settings-overlay')?.classList.add('open');
+            }
+        });
+    }
+
+    // ── Log ────────────────────────────────────────────────
+    function addLog(type, message) {
+        const container = $('#log-container');
+        if (!container) return;
+
+        const empty = container.querySelector('.log-empty');
+        if (empty) empty.remove();
+
+        const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${type}`;
+        entry.innerHTML = `<div class="log-dot"></div><span class="log-time">${time}</span><span class="log-message">${escapeHtml(message)}</span>`;
+        container.appendChild(entry);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function setupLogClear() {
+        $('#btn-clear-log')?.addEventListener('click', () => {
+            const container = $('#log-container');
+            if (container) container.innerHTML = '<div class="log-empty">No logs yet</div>';
+        });
+    }
+    setupLogClear();
+
+    // ── Toast ──────────────────────────────────────────────
     function showToast(message, type = 'info') {
+        const container = $('#toast-container');
+        if (!container) return;
+
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
-        toast.innerHTML = `
-            <div class="toast-dot"></div>
-            <span>${escapeHtml(message)}</span>
-        `;
-        toastContainer.appendChild(toast);
+        toast.innerHTML = `<div class="toast-dot"></div><span>${escapeHtml(message)}</span>`;
+        container.appendChild(toast);
 
-        setTimeout(() => {
-            toast.classList.add('toast-out');
-            toast.addEventListener('animationend', () => toast.remove());
-        }, 3500);
+        setTimeout(() => { toast.classList.add('toast-out'); }, 3000);
+        setTimeout(() => { toast.remove(); }, 3400);
     }
 
-    // ============================================================
-    //  Utilities
-    // ============================================================
+    // ── Message Passing ────────────────────────────────────
+    function sendMessage(msg) {
+        if (window.chrome?.webview) {
+            window.chrome.webview.postMessage(msg);
+        }
+    }
 
+    // Handle messages from C#
+    if (window.chrome?.webview) {
+        window.chrome.webview.addEventListener('message', (e) => {
+            const msg = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+            handleMessage(msg);
+        });
+    }
+
+    function handleMessage(msg) {
+        switch (msg.type) {
+            case 'processes':
+                processes = msg.data || [];
+                renderProcessList();
+                checkForGameProcess();
+                break;
+
+            case 'dllSelected':
+                if (msg.path) setDll(msg.path);
+                break;
+
+            case 'injectResult':
+                const btn = $('#btn-inject');
+                if (btn) { btn.classList.remove('loading'); btn.disabled = false; }
+                updateInjectButton();
+
+                if (msg.success) {
+                    addLog('success', msg.message);
+                    showToast(msg.message, 'success');
+                } else {
+                    addLog('error', msg.message);
+                    showToast(msg.message, 'error');
+                }
+                break;
+
+            case 'scriptResult':
+                if (msg.success) {
+                    addScriptOutput('success', msg.message || 'Script executed successfully');
+                } else {
+                    addScriptOutput('error', msg.message || 'Script execution failed');
+                }
+                break;
+
+            case 'error':
+                addLog('error', msg.message);
+                showToast(msg.message, 'error');
+                break;
+        }
+    }
+
+    // ── Utilities ──────────────────────────────────────────
     function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    function pad(n) {
-        return n.toString().padStart(2, '0');
-    }
-
-    // ============================================================
-    //  Init
-    // ============================================================
-
-    // Load processes on startup
-    requestProcesses();
-
-    // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-        // Ctrl+I to inject
-        if (e.ctrlKey && e.key === 'i') {
-            e.preventDefault();
-            if (!btnInject.disabled) btnInject.click();
-        }
-        // Ctrl+R to refresh processes
-        if (e.ctrlKey && e.key === 'r') {
-            e.preventDefault();
-            requestProcesses();
-        }
-        // Ctrl+O to browse DLL
-        if (e.ctrlKey && e.key === 'o') {
-            e.preventDefault();
-            btnBrowse.click();
-        }
-        // Escape to clear search
-        if (e.key === 'Escape') {
-            processSearch.value = '';
-            renderProcessList();
-            processSearch.blur();
-        }
-    });
-
+    // ── Start ──────────────────────────────────────────────
+    init();
 })();

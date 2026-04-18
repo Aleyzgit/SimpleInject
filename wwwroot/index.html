@@ -1,177 +1,267 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="theme-amber">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SimpleInject</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <!-- ===== TITLE BAR ===== -->
     <div class="titlebar" id="titlebar">
         <div class="titlebar-left">
-            <svg class="titlebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2L12 14M12 14L8 10M12 14L16 10"/>
-                <path d="M5 17C5 17 5 21 12 21C19 21 19 17 19 17" stroke-linecap="round"/>
-            </svg>
+            <img src="app-icon.ico" class="titlebar-icon" alt="" draggable="false">
             <span class="titlebar-title">SimpleInject</span>
-            <span class="titlebar-version">v1.0</span>
+            <span class="titlebar-version">v2.0</span>
         </div>
         <div class="titlebar-controls">
+            <button class="titlebar-btn settings-btn" id="btn-settings" title="Settings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+                </svg>
+            </button>
             <button class="titlebar-btn minimize-btn" id="btn-minimize" title="Minimize">
                 <svg viewBox="0 0 12 12"><rect y="5" width="12" height="2" rx="1" fill="currentColor"/></svg>
             </button>
             <button class="titlebar-btn close-btn" id="btn-close" title="Close">
-                <svg viewBox="0 0 12 12">
-                    <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
+                <svg viewBox="0 0 12 12"><path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             </button>
         </div>
     </div>
 
-    <!-- ===== MAIN CONTENT ===== -->
-    <div class="main-content">
+    <!-- ===== TAB BAR ===== -->
+    <div class="tab-bar">
+        <button class="tab active" data-tab="injector" id="tab-injector">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+            DLL Injector
+        </button>
+        <button class="tab" data-tab="scripts" id="tab-scripts">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>
+            Script Executor
+        </button>
+    </div>
 
-        <!-- Left Column -->
-        <div class="column column-left">
-            <!-- Process Selection Card -->
-            <div class="card card-process" style="--delay: 0.05s">
-                <div class="card-header">
-                    <div class="card-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <rect x="2" y="3" width="20" height="14" rx="2"/>
-                            <path d="M8 21h8M12 17v4"/>
-                        </svg>
+    <!-- ===== TAB: DLL INJECTOR ===== -->
+    <div class="tab-content active" id="content-injector">
+        <div class="main-content">
+            <!-- Left Column -->
+            <div class="column column-left">
+                <div class="card card-process" style="--delay: 0.05s">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                        </div>
+                        <div>
+                            <h2 class="card-title">Process</h2>
+                            <p class="card-subtitle">Select a target process</p>
+                        </div>
+                        <button class="refresh-btn" id="btn-refresh" title="Refresh (Ctrl+R)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
+                        </button>
                     </div>
-                    <div>
-                        <h2 class="card-title">Process</h2>
-                        <p class="card-subtitle">Select a target process</p>
+
+                    <div class="search-wrapper">
+                        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                        <input type="text" class="search-input" id="process-search" placeholder="Search processes..." autocomplete="off" spellcheck="false">
+                        <span class="process-count" id="process-count">0</span>
                     </div>
-                    <button class="refresh-btn" id="btn-refresh" title="Refresh process list">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 4v6h6M23 20v-6h-6"/>
-                            <path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/>
-                        </svg>
-                    </button>
-                </div>
 
-                <div class="search-wrapper">
-                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="8"/>
-                        <path d="M21 21l-4.35-4.35"/>
-                    </svg>
-                    <input type="text" class="search-input" id="process-search" placeholder="Search processes..." autocomplete="off" spellcheck="false">
-                    <span class="process-count" id="process-count">0</span>
-                </div>
-
-                <div class="process-list-container">
-                    <div class="process-list" id="process-list">
-                        <div class="process-placeholder">
-                            <div class="spinner"></div>
-                            <span>Loading processes...</span>
+                    <div class="process-list-container">
+                        <div class="process-list" id="process-list">
+                            <div class="process-placeholder"><div class="spinner"></div><span>Loading processes...</span></div>
                         </div>
                     </div>
+
+                    <div class="selected-process" id="selected-process" style="display:none;">
+                        <span class="selected-label">Selected:</span>
+                        <span class="selected-name" id="selected-name">—</span>
+                        <span class="selected-pid" id="selected-pid">—</span>
+                        <button class="icon-btn" id="btn-fav-process" title="Add to favorites">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>
+                        </button>
+                        <button class="icon-btn" id="btn-clear-process" title="Clear selection">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="column column-right">
+                <!-- DLL Selection Card -->
+                <div class="card card-dll" style="--delay: 0.1s">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+                        </div>
+                        <div>
+                            <h2 class="card-title">DLL File</h2>
+                            <p class="card-subtitle">Choose the library to inject</p>
+                        </div>
+                    </div>
+                    <div class="dll-path-wrapper">
+                        <div class="dll-path-display" id="dll-path-display">
+                            <span class="dll-path-text" id="dll-path-text">No file selected</span>
+                        </div>
+                        <button class="browse-btn" id="btn-browse">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                            Browse
+                        </button>
+                    </div>
+                    <!-- Recent DLLs -->
+                    <div class="recent-dlls" id="recent-dlls" style="display:none;">
+                        <span class="recent-label">Recent:</span>
+                        <div class="recent-list" id="recent-list"></div>
+                    </div>
+                    <div class="dll-info" id="dll-info" style="display:none;">
+                        <div class="dll-info-row"><span class="dll-info-label">File name</span><span class="dll-info-value" id="dll-filename">—</span></div>
+                        <div class="dll-info-row"><span class="dll-info-label">Full path</span><span class="dll-info-value dll-info-path" id="dll-fullpath">—</span></div>
+                    </div>
                 </div>
 
-                <!-- Selected process display -->
-                <div class="selected-process" id="selected-process" style="display:none;">
-                    <span class="selected-label">Selected:</span>
-                    <span class="selected-name" id="selected-name">—</span>
-                    <span class="selected-pid" id="selected-pid">—</span>
-                    <button class="clear-btn" id="btn-clear-process" title="Clear selection">✕</button>
+                <!-- Inject Card -->
+                <div class="card card-inject" style="--delay: 0.15s">
+                    <button class="inject-btn" id="btn-inject" disabled>
+                        <span class="inject-btn-text">INJECT</span>
+                        <span class="inject-btn-loader"></span>
+                        <div class="inject-btn-glow"></div>
+                    </button>
+                    <p class="inject-hint" id="inject-hint">Select a process and DLL to continue</p>
+                </div>
+
+                <!-- Log Card -->
+                <div class="card card-log" style="--delay: 0.2s">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        </div>
+                        <div><h2 class="card-title">Log</h2><p class="card-subtitle">Injection results</p></div>
+                        <button class="refresh-btn" id="btn-clear-log" title="Clear log">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-2 14H7L5 6M10 11v6M14 11v6M5 6l1-3h12l1 3"/></svg>
+                        </button>
+                    </div>
+                    <div class="log-container" id="log-container"><div class="log-empty">No logs yet</div></div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Right Column -->
-        <div class="column column-right">
-            <!-- DLL Selection Card -->
-            <div class="card card-dll" style="--delay: 0.12s">
-                <div class="card-header">
-                    <div class="card-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                            <polyline points="14,2 14,8 20,8"/>
-                        </svg>
+    <!-- ===== TAB: SCRIPT EXECUTOR ===== -->
+    <div class="tab-content" id="content-scripts">
+        <div class="main-content">
+            <div class="column column-left">
+                <div class="card card-editor" style="--delay: 0.05s">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>
+                        </div>
+                        <div><h2 class="card-title">Script Editor</h2><p class="card-subtitle">Write or paste Lua scripts for testing</p></div>
                     </div>
-                    <div>
-                        <h2 class="card-title">DLL File</h2>
-                        <p class="card-subtitle">Choose the library to inject</p>
+                    <div class="editor-wrapper">
+                        <div class="editor-line-numbers" id="line-numbers">1</div>
+                        <textarea class="editor-textarea" id="script-editor" spellcheck="false" placeholder="-- Write your Lua script here...&#10;print('Hello from SimpleInject!')"></textarea>
                     </div>
-                </div>
-
-                <div class="dll-path-wrapper">
-                    <div class="dll-path-display" id="dll-path-display">
-                        <span class="dll-path-text" id="dll-path-text">No file selected</span>
-                    </div>
-                    <button class="browse-btn" id="btn-browse">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
-                        </svg>
-                        Browse
-                    </button>
-                </div>
-
-                <div class="dll-info" id="dll-info" style="display:none;">
-                    <div class="dll-info-row">
-                        <span class="dll-info-label">File name</span>
-                        <span class="dll-info-value" id="dll-filename">—</span>
-                    </div>
-                    <div class="dll-info-row">
-                        <span class="dll-info-label">Full path</span>
-                        <span class="dll-info-value dll-info-path" id="dll-fullpath">—</span>
+                    <div class="editor-toolbar">
+                        <button class="toolbar-btn" id="btn-clear-script" title="Clear">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-2 14H7L5 6"/></svg>
+                            Clear
+                        </button>
+                        <div class="editor-spacer"></div>
+                        <button class="toolbar-btn primary" id="btn-execute" disabled>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg>
+                            Execute
+                        </button>
                     </div>
                 </div>
             </div>
-
-            <!-- Inject Card -->
-            <div class="card card-inject" style="--delay: 0.19s">
-                <div class="card-header">
-                    <div class="card-icon icon-inject">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M12 5v14M5 12h14" stroke-linecap="round"/>
-                        </svg>
+            <div class="column column-right">
+                <div class="card" style="--delay: 0.1s">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                        </div>
+                        <div><h2 class="card-title">Target</h2><p class="card-subtitle">Auto-detects running game instances</p></div>
+                        <button class="refresh-btn" id="btn-refresh-scripts" title="Refresh">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
+                        </button>
                     </div>
-                    <div>
-                        <h2 class="card-title">Inject</h2>
-                        <p class="card-subtitle">Execute DLL injection</p>
+                    <div class="target-status" id="target-status">
+                        <div class="status-dot offline"></div>
+                        <span>No game instance detected</span>
                     </div>
                 </div>
+                <div class="card" style="--delay: 0.15s">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+                        </div>
+                        <div><h2 class="card-title">Script Library</h2><p class="card-subtitle">Quick-use test scripts</p></div>
+                    </div>
+                    <div class="script-library" id="script-library"></div>
+                </div>
+                <div class="card card-log" style="--delay: 0.2s">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        </div>
+                        <div><h2 class="card-title">Output</h2><p class="card-subtitle">Script execution output</p></div>
+                    </div>
+                    <div class="log-container" id="script-output"><div class="log-empty">No output yet</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                <button class="inject-btn" id="btn-inject" disabled>
-                    <span class="inject-btn-text">INJECT</span>
-                    <span class="inject-btn-loader"></span>
-                    <div class="inject-btn-glow"></div>
+    <!-- ===== SETTINGS MODAL ===== -->
+    <div class="modal-overlay" id="settings-overlay">
+        <div class="modal" id="settings-modal">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="icon-btn" id="btn-close-settings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg>
                 </button>
-
-                <p class="inject-hint" id="inject-hint">Select a process and DLL to continue</p>
             </div>
-
-            <!-- Status / Log Card -->
-            <div class="card card-log" style="--delay: 0.26s">
-                <div class="card-header">
-                    <div class="card-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                        </svg>
+            <div class="modal-body">
+                <section class="settings-section">
+                    <h3 class="settings-section-title">Theme</h3>
+                    <div class="theme-grid" id="theme-grid">
+                        <button class="theme-swatch active" data-theme="theme-amber" title="Amber (Default)"><span style="background:#f59e0b"></span>Amber</button>
+                        <button class="theme-swatch" data-theme="theme-catppuccin-mocha" title="Catppuccin Mocha"><span style="background:#cba6f7"></span>Mocha</button>
+                        <button class="theme-swatch" data-theme="theme-catppuccin-latte" title="Catppuccin Latte"><span style="background:#8839ef"></span>Latte</button>
+                        <button class="theme-swatch" data-theme="theme-nord" title="Nord"><span style="background:#88c0d0"></span>Nord</button>
+                        <button class="theme-swatch" data-theme="theme-dracula" title="Dracula"><span style="background:#bd93f9"></span>Dracula</button>
+                        <button class="theme-swatch" data-theme="theme-rose" title="Rosé Pine"><span style="background:#eb6f92"></span>Rosé</button>
                     </div>
-                    <div>
-                        <h2 class="card-title">Log</h2>
-                        <p class="card-subtitle">Injection results</p>
+                </section>
+                <section class="settings-section">
+                    <h3 class="settings-section-title">Behavior</h3>
+                    <label class="settings-toggle">
+                        <span>Auto-refresh process list on start</span>
+                        <input type="checkbox" id="setting-autorefresh" checked>
+                        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+                    </label>
+                    <label class="settings-toggle">
+                        <span>Show window title in process list</span>
+                        <input type="checkbox" id="setting-showtitles" checked>
+                        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+                    </label>
+                    <label class="settings-toggle">
+                        <span>Remember last selected DLL</span>
+                        <input type="checkbox" id="setting-rememberdll" checked>
+                        <div class="toggle-track"><div class="toggle-thumb"></div></div>
+                    </label>
+                </section>
+                <section class="settings-section">
+                    <h3 class="settings-section-title">About</h3>
+                    <div class="about-info">
+                        <p><strong>SimpleInject</strong> v2.0</p>
+                        <p class="text-muted">DLL Injector & Script Executor</p>
+                        <p class="text-muted">Built with C# + WebView2</p>
                     </div>
-                    <button class="refresh-btn" id="btn-clear-log" title="Clear log">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3,6 5,6 21,6"/>
-                            <path d="M19 6l-2 14H7L5 6M10 11v6M14 11v6M5 6l1-3h12l1 3"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="log-container" id="log-container">
-                    <div class="log-empty">No logs yet</div>
-                </div>
+                </section>
             </div>
         </div>
     </div>

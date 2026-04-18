@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Collections.Concurrent;
 
 namespace SimpleInject;
 
@@ -41,19 +42,19 @@ public static class Injector
     [DllImport("kernel32.dll", SetLastError = true)]
     static extern uint WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
 
+    // --- Icon Cache ---
+    private static readonly ConcurrentDictionary<string, string> _iconCache = new();
+
     /// <summary>
     /// Inject a DLL into a target process using the classic LoadLibrary technique.
     /// </summary>
     public static (bool Success, string Message) Inject(int processId, string dllPath)
     {
-        // Validate DLL path
         if (!File.Exists(dllPath))
             return (false, $"DLL not found: {dllPath}");
 
-        // Get full path
         dllPath = Path.GetFullPath(dllPath);
 
-        // Check that target process exists
         Process? targetProcess;
         try
         {
@@ -69,12 +70,10 @@ public static class Injector
 
         try
         {
-            // Open the target process
             hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, processId);
             if (hProcess == IntPtr.Zero)
                 return (false, $"Failed to open process. Error: {Marshal.GetLastWin32Error()}. Run as administrator.");
 
-            // Get the address of LoadLibraryA in kernel32.dll
             IntPtr kernel32 = GetModuleHandleA("kernel32.dll");
             if (kernel32 == IntPtr.Zero)
                 return (false, "Failed to get kernel32.dll handle.");
@@ -83,24 +82,20 @@ public static class Injector
             if (loadLibraryAddr == IntPtr.Zero)
                 return (false, "Failed to get LoadLibraryA address.");
 
-            // Allocate memory in the target process for the DLL path
             byte[] dllBytes = Encoding.ASCII.GetBytes(dllPath + '\0');
             uint size = (uint)dllBytes.Length;
 
             allocAddr = VirtualAllocEx(hProcess, IntPtr.Zero, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
             if (allocAddr == IntPtr.Zero)
-                return (false, $"Failed to allocate memory in target process. Error: {Marshal.GetLastWin32Error()}");
+                return (false, $"Failed to allocate memory. Error: {Marshal.GetLastWin32Error()}");
 
-            // Write the DLL path into the allocated memory
             if (!WriteProcessMemory(hProcess, allocAddr, dllBytes, size, out _))
-                return (false, $"Failed to write to process memory. Error: {Marshal.GetLastWin32Error()}");
+                return (false, $"Failed to write memory. Error: {Marshal.GetLastWin32Error()}");
 
-            // Create a remote thread that calls LoadLibraryA with our DLL path
             IntPtr hThread = CreateRemoteThread(hProcess, IntPtr.Zero, 0, loadLibraryAddr, allocAddr, 0, out _);
             if (hThread == IntPtr.Zero)
                 return (false, $"Failed to create remote thread. Error: {Marshal.GetLastWin32Error()}");
 
-            // Wait for the thread to finish (5 second timeout)
             WaitForSingleObject(hThread, 5000);
             CloseHandle(hThread);
 
@@ -112,41 +107,41 @@ public static class Injector
         }
         finally
         {
-            // Clean up allocated memory
             if (allocAddr != IntPtr.Zero && hProcess != IntPtr.Zero)
                 VirtualFreeEx(hProcess, allocAddr, 0, MEM_RELEASE);
-
             if (hProcess != IntPtr.Zero)
                 CloseHandle(hProcess);
         }
     }
 
     /// <summary>
-    /// Get a list of running processes with optional window title and icon.
+    /// Get process list asynchronously with cached icons.
     /// </summary>
-    public static List<ProcessInfo> GetProcessList()
+    public static Task<List<ProcessInfo>> GetProcessListAsync()
     {
-        var list = new List<ProcessInfo>();
-        foreach (var proc in Process.GetProcesses())
+        return Task.Run(() =>
         {
-            try
+            var list = new List<ProcessInfo>();
+            foreach (var proc in Process.GetProcesses())
             {
-                string iconBase64 = GetProcessIconBase64(proc);
-                list.Add(new ProcessInfo(proc.Id, proc.ProcessName, proc.MainWindowTitle ?? "", iconBase64));
+                try
+                {
+                    string iconBase64 = GetProcessIconCached(proc);
+                    list.Add(new ProcessInfo(proc.Id, proc.ProcessName, proc.MainWindowTitle ?? "", iconBase64));
+                }
+                catch
+                {
+                    // Skip inaccessible processes
+                }
             }
-            catch
-            {
-                // Skip processes we can't access
-            }
-        }
-        return list.OrderBy(p => p.Name.ToLowerInvariant()).ToList();
+            return list.OrderBy(p => p.Name.ToLowerInvariant()).ToList();
+        });
     }
 
     /// <summary>
-    /// Extract the small icon from a process's main module and return as a base64 data URI.
-    /// Returns empty string if icon cannot be extracted.
+    /// Extract icon with caching by exe path.
     /// </summary>
-    private static string GetProcessIconBase64(Process proc)
+    private static string GetProcessIconCached(Process proc)
     {
         try
         {
@@ -154,15 +149,25 @@ public static class Injector
             if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
                 return "";
 
-            using var icon = System.Drawing.Icon.ExtractAssociatedIcon(filePath);
-            if (icon == null) return "";
+            // Check cache first
+            if (_iconCache.TryGetValue(filePath, out var cached))
+                return cached;
 
-            // Use small 16x16 icon for performance
+            using var icon = System.Drawing.Icon.ExtractAssociatedIcon(filePath);
+            if (icon == null)
+            {
+                _iconCache[filePath] = "";
+                return "";
+            }
+
             using var smallIcon = new System.Drawing.Icon(icon, 16, 16);
             using var bmp = smallIcon.ToBitmap();
             using var ms = new MemoryStream();
             bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-            return "data:image/png;base64," + Convert.ToBase64String(ms.ToArray());
+            var result = "data:image/png;base64," + Convert.ToBase64String(ms.ToArray());
+
+            _iconCache[filePath] = result;
+            return result;
         }
         catch
         {
